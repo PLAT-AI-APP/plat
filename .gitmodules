@@ -1,0 +1,3 @@
+[submodule "plat-config"]
+	path = plat-config
+	url = git@github.com:PLAT-AI-APP/plat-config.git
