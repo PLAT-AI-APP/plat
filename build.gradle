@@ -1,0 +1,108 @@
+plugins {
+    id 'org.springframework.boot' version '4.0.2' apply false
+    id 'io.spring.dependency-management' version '1.1.7' apply false
+}
+
+allprojects {
+    group = projectGroup
+    version = applicationVersion
+
+    repositories {
+        mavenCentral()
+        maven { url 'https://repo.spring.io/milestone' }
+    }
+}
+
+subprojects {
+    apply plugin: 'java'
+    apply plugin: 'io.spring.dependency-management'
+    apply plugin: 'org.springframework.boot'
+
+    java {
+        toolchain {
+            languageVersion = JavaLanguageVersion.of(25)
+        }
+    }
+
+    dependencyManagement {
+        imports {
+            mavenBom "org.springframework.ai:spring-ai-bom:${springAiVersion}"
+        }
+    }
+
+    dependencies {
+        compileOnly 'org.projectlombok:lombok'
+        annotationProcessor 'org.projectlombok:lombok'
+
+    }
+
+    tasks.named('test') {
+        useJUnitPlatform()
+    }
+}
+
+project(":plat-ai") {
+
+    processResources.dependsOn("copySecret")
+
+    tasks.register("copySecret", Copy) {
+        from "${project.rootDir}/plat-config/ai"
+        include "application*.yaml"
+        into "${project.rootDir}/plat-ai/src/main/resources"
+    }
+
+    dependencies {
+        implementation 'org.springframework.boot:spring-boot-starter'
+        testImplementation 'org.springframework.boot:spring-boot-starter-test'
+        testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+
+        implementation 'org.springframework.ai:spring-ai-starter-model-openai'
+        implementation 'org.springframework.ai:spring-ai-starter-model-anthropic'
+        implementation 'org.springframework.ai:spring-ai-starter-model-google-genai'
+
+        implementation project(':plat-data')
+
+    }
+}
+
+project(":plat-data") {
+
+    processResources.dependsOn("copySecret")
+
+    tasks.register("copySecret", Copy) {
+        from "${project.rootDir}/plat-config/data"
+        include "data*.yaml"
+        into "${project.rootDir}/plat-data/src/main/resources"
+    }
+
+    dependencies {
+        implementation 'org.springframework.boot:spring-boot-starter'
+        testImplementation 'org.springframework.boot:spring-boot-starter-test'
+
+        implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
+        testImplementation 'org.springframework.boot:spring-boot-starter-data-jpa-test'
+
+        testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+        implementation 'com.h2database:h2'
+        testImplementation 'com.h2database:h2'
+    }
+}
+
+project(":plat-boot") {
+
+    processResources.dependsOn("copySecret")
+
+    tasks.register("copySecret", Copy) {
+        from "${project.rootDir}/plat-config/boot"
+        include "application*.yaml"
+        into "${project.rootDir}/plat-boot/src/main/resources"
+    }
+
+    dependencies {
+        implementation 'org.springframework.boot:spring-boot-starter-web'
+        testImplementation 'org.springframework.boot:spring-boot-starter-test'
+        testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+
+        implementation project(':plat-data')
+    }
+}

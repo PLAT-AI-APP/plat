@@ -1,0 +1,5 @@
+rootProject.name = 'plat'
+
+include 'plat-boot'
+include 'plat-data'
+include 'plat-ai'
