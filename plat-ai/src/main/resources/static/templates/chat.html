@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PLAT 페르소나 채팅 테스트</title>
+    <script src="/js/chat.js"></script>
+    <link rel="stylesheet" href="/css/chat.css">
+</head>
+<body>
+<div class="chat-container">
+    <div class="chat-header">
+        <h1>PLAT 페르소나 채팅</h1>
+        <p>찐따 룸메가 여자'TS'가 됐다</p>
+    </div>
+
+    <div class="chat-messages" id="chatMessages">
+    </div>
+
+    <div class="loading" id="loading">AI가 응답 중입니다...</div>
+
+    <div class="chat-input-container">
+        <div class="chat-input-wrapper">
+            <input
+                    type="text"
+                    class="chat-input"
+                    id="messageInput"
+                    placeholder="메시지를 입력하세요..."
+                    onkeypress="handleKeyPress(event)"
+            />
+            <button class="send-button" onclick="sendMessage()" id="sendButton">
+                전송
+            </button>
+        </div>
+    </div>
+
+    <div class="controls">
+        <button class="control-button" onclick="clearChat()">대화 초기화</button>
+        <button class="control-button" onclick="viewHistory()">히스토리 보기</button>
+    </div>
+</div>
+
+<script>
+    const SESSION_ID = 'session-' + Date.now();
+    const API_BASE_URL = 'http://localhost:8080/api/chat';
+
+    const socket = new ChatSocket(`${API_BASE_URL}/stream`, 'CLAUDE_SONNET_4_5')
+        .error(error => {
+            console.error('메시지 전송 오류:', error);
+            addMessage('오류가 발생했습니다: ' + error.message, 'assistant');
+        })
+        .finally(() => {
+            document.getElementById('sendButton').disabled = false;
+            document.getElementById('loading').classList.remove('active');
+        })
+
+    window.onload = async () => {
+        try {
+            await fetch(`${API_BASE_URL}/session/${SESSION_ID}/start`, { method: 'POST' });
+        } catch (error) {
+            console.error('세션 시작 오류:', error);
+        }
+    };
+
+    function handleKeyPress(event) {
+        if (event.key === 'Enter') sendMessage();
+    }
+
+    /**
+     * AI 응답 텍스트를 블록 단위로 파싱
+     * - "대사" → dialogue
+     * - '독백' → thought
+     * - > 선택지 → choice
+     * - ```INFO ... ``` → info
+     * - 나머지 → narration
+     */
+    function parseBlocks(text) {
+        const blocks = [];
+        // \n\n 으로 문단 분리
+        const paragraphs = text.split('\n\n');
+
+        let inInfoBlock = false;
+        let infoContent = '';
+
+        for (const para of paragraphs) {
+            const trimmed = para.trim();
+            if (!trimmed) continue;
+
+            // INFO 블록 시작
+            if (trimmed.startsWith('```INFO') || trimmed.startsWith('```info')) {
+                inInfoBlock = true;
+                infoContent = trimmed.replace(/^```INFO\s*/i, '');
+                // 같은 문단에서 닫히는 경우
+                if (infoContent.includes('```')) {
+                    infoContent = infoContent.replace(/```\s*$/, '');
+                    blocks.push({ type: 'info', content: infoContent.trim() });
+                    inInfoBlock = false;
+                    infoContent = '';
+                }
+                continue;
+            }
+
+            // INFO 블록 진행중
+            if (inInfoBlock) {
+                if (trimmed.includes('```')) {
+                    infoContent += '\n\n' + trimmed.replace(/```\s*$/, '');
+                    blocks.push({ type: 'info', content: infoContent.trim() });
+                    inInfoBlock = false;
+                    infoContent = '';
+                } else {
+                    infoContent += '\n\n' + trimmed;
+                }
+                continue;
+            }
+
+            // 선택지 (> 로 시작하는 줄들)
+            const lines = trimmed.split('\n');
+            if (lines.every(l => l.trim().startsWith('>'))) {
+                for (const line of lines) {
+                    const choiceText = line.trim().replace(/^>\s*/, '');
+                    if (choiceText) blocks.push({ type: 'choice', content: choiceText });
+                }
+                continue;
+            }
+
+            // 선택지가 다른 블록과 섞인 경우 줄 단위 처리
+            let hasChoice = false;
+            const nonChoiceLines = [];
+            for (const line of lines) {
+                if (line.trim().startsWith('>')) {
+                    // 선택지 전에 쌓인 일반 텍스트 처리
+                    if (nonChoiceLines.length > 0) {
+                        classifyParagraph(nonChoiceLines.join('\n'), blocks);
+                        nonChoiceLines.length = 0;
+                    }
+                    const choiceText = line.trim().replace(/^>\s*/, '');
+                    if (choiceText) blocks.push({ type: 'choice', content: choiceText });
+                    hasChoice = true;
+                } else {
+                    nonChoiceLines.push(line);
+                }
+            }
+            if (nonChoiceLines.length > 0) {
+                classifyParagraph(nonChoiceLines.join('\n'), blocks);
+            }
+            if (!hasChoice && nonChoiceLines.length === 0) {
+                classifyParagraph(trimmed, blocks);
+            }
+        }
+
+        // INFO 블록이 닫히지 않은 채 끝남 (스트리밍 중)
+        if (inInfoBlock && infoContent.trim()) {
+            blocks.push({ type: 'info', content: infoContent.trim() });
+        }
+
+        return blocks;
+    }
+
+    function classifyParagraph(text, blocks) {
+        const trimmed = text.trim();
+        if (!trimmed) return;
+
+        // "대사" — 큰따옴표로 시작
+        if (trimmed.startsWith('"')) {
+            // 닫는 따옴표 제거
+            let content = trimmed;
+            if (content.endsWith('"')) {
+                content = content.slice(1, -1);
+            } else {
+                content = content.slice(1);
+            }
+            blocks.push({ type: 'dialogue', content });
+            return;
+        }
+
+        // '독백' — 작은따옴표로 시작
+        if (trimmed.startsWith("'")) {
+            let content = trimmed;
+            if (content.endsWith("'")) {
+                content = content.slice(1, -1);
+            } else {
+                content = content.slice(1);
+            }
+            blocks.push({ type: 'thought', content });
+            return;
+        }
+
+        // 나머지는 나레이션
+        blocks.push({ type: 'narration', content: trimmed });
+    }
+
+    /**
+     * 파싱된 블록 배열을 HTML로 렌더링
+     */
+    function renderBlocks(blocks) {
+        let html = '';
+        let choicesHtml = '';
+        let choiceCount = 0;
+
+        for (const block of blocks) {
+            switch (block.type) {
+                case 'dialogue':
+                    html += `<div class="block-dialogue">"${escapeHtml(block.content)}"</div>`;
+                    break;
+                case 'thought':
+                    html += `<div class="block-thought">'${escapeHtml(block.content)}'</div>`;
+                    break;
+                case 'narration':
+                    html += `<div class="block-narration">${escapeHtml(block.content)}</div>`;
+                    break;
+                case 'choice':
+                    choicesHtml += `<button class="block-choice" data-raw="${escapeAttr(block.content)}" onclick="sendChoice(this.dataset.raw)">${formatChoice(block.content)}</button>`;
+                    choiceCount++;
+                    break;
+                case 'info':
+                    html += renderInfoBlock(block.content);
+                    break;
+            }
+        }
+
+        // 선택지 모아서 출력
+        if (choiceCount > 0) {
+            // 선택지는 info 블록 앞에 삽입
+            const infoIdx = html.lastIndexOf('<div class="block-info"');
+            const choicesBlock = `<div class="block-choices">${choicesHtml}</div>`;
+            if (infoIdx > -1) {
+                html = html.slice(0, infoIdx) + choicesBlock + html.slice(infoIdx);
+            } else {
+                html += choicesBlock;
+            }
+        }
+
+        return html;
+    }
+
+    function renderInfoBlock(content) {
+        const lines = content.split('\n');
+        let nameHtml = '';
+        const bodyLines = [];
+
+        for (let i = 0; i < lines.length; i++) {
+            const line = lines[i].trim();
+            if (!line) continue;
+            if (i === 0 && !line.startsWith('📍') && !line.startsWith('🕐')) {
+                nameHtml = `<div class="info-name">${escapeHtml(line)}</div>`;
+            } else {
+                bodyLines.push(`<div class="info-line">${escapeHtml(line)}</div>`);
+            }
+        }
+
+        return `<div class="block-info">${nameHtml}${bodyLines.join('')}</div>`;
+    }
+
+    function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+
+    function escapeAttr(text) {
+        return text.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/'/g, '&#39;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    }
+
+    function formatChoice(text) {
+        return escapeHtml(text).replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+    }
+
+    /**
+     * 선택지 클릭 시 해당 텍스트를 메시지로 전송
+     */
+    function sendChoice(text) {
+        document.getElementById('messageInput').value = text;
+        sendMessage();
+    }
+
+    async function sendMessage() {
+        const input = document.getElementById('messageInput');
+        const message = input.value.trim();
+        if (!message) return;
+
+        addMessage(message, 'user');
+        input.value = '';
+
+        document.getElementById('sendButton').disabled = true;
+        document.getElementById('loading').classList.add('active');
+
+        let messageElement = null;
+        await socket.stream(message, fullText => {
+            const blocks = parseBlocks(fullText);
+            const html = renderBlocks(blocks);
+
+            if (!messageElement) {
+                messageElement = addMessage('', 'assistant');
+            }
+
+            messageElement.querySelector('.message-content').innerHTML = html;
+            scrollToBottom();
+        })
+    }
+
+    function addMessage(content, role) {
+        const messagesContainer = document.getElementById('chatMessages');
+        const messageDiv = document.createElement('div');
+        messageDiv.className = `message ${role}`;
+
+        const contentDiv = document.createElement('div');
+        contentDiv.className = 'message-content';
+
+        if (role === 'assistant' && content) {
+            const blocks = parseBlocks(content);
+            contentDiv.innerHTML = renderBlocks(blocks);
+        } else if (role === 'user') {
+            contentDiv.textContent = content;
+        }
+
+        messageDiv.appendChild(contentDiv);
+        messagesContainer.appendChild(messageDiv);
+        scrollToBottom();
+        return messageDiv;
+    }
+
+    function scrollToBottom() {
+        const messagesContainer = document.getElementById('chatMessages');
+        messagesContainer.scrollTop = messagesContainer.scrollHeight;
+    }
+
+    async function clearChat() {
+        if (!confirm('대화 히스토리를 초기화하시겠습니까?')) return;
+
+        try {
+            await fetch(`${API_BASE_URL}/session/${SESSION_ID}`, { method: 'DELETE' });
+            document.getElementById('chatMessages').innerHTML = '';
+            alert('대화 히스토리가 초기화되었습니다.');
+        } catch (error) {
+            console.error('초기화 오류:', error);
+            alert('초기화 중 오류가 발생했습니다.');
+        }
+    }
+
+    async function viewHistory() {
+        try {
+            const response = await fetch(`${API_BASE_URL}/session/${SESSION_ID}/history`);
+            const data = await response.json();
+            alert('대화 히스토리:\n\n' + data.history);
+        } catch (error) {
+            console.error('히스토리 조회 오류:', error);
+            alert('히스토리 조회 중 오류가 발생했습니다.');
+        }
+    }
+</script>
+</body>
+</html>
