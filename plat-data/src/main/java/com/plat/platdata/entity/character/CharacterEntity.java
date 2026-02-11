@@ -4,7 +4,7 @@ import com.plat.platdata.entity.BaseEntity;
 import com.plat.platdata.entity.character.enums.*;
 import com.plat.platdata.entity.character.lorebook.Lorebook;
 import com.plat.platdata.entity.character.scenario.Scenario;
-import com.plat.platdata.entity.user.enums.Gender;
+import com.plat.platdata.domain.user.enums.Gender;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
 import lombok.Builder;
@@ -15,7 +15,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 @Entity
-@Table(name = "character")
+@Table(name = "`character`")
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class CharacterEntity extends BaseEntity {

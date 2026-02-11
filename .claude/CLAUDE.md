@@ -23,21 +23,29 @@ plat-ai  →  plat-data
 plat-boot →  plat-data
 ```
 
-- **plat-data** — JPA entity and repository layer. No AI dependencies. Contains all domain entities, enums, and Spring Data JPA repositories.
+- **plat-data** — Hexagonal architecture: domain POJOs + JPA entities + adapters. Exposes `domain/` and `repository/` (port interfaces) to external modules. JPA is encapsulated internally via `entity/`, `jparepository/`, and `adapter/`. Uses `java-library` plugin with `api 'spring-tx'` for transactional orchestration.
 - **plat-ai** — AI orchestration layer. Depends on plat-data. Handles chat model routing (Claude, Gemini, GPT), prompt construction, conversation history, and streaming responses via `Flux<String>`.
-- **plat-boot** — Bootable application that combines plat-data. Component-scans both `com.plat.platboot` and `com.plat.platdata`.
+- **plat-boot** — Bootable application that combines plat-data. Component-scans both `com.plat.platboot` and `com.plat.platdata`. Uses only domain objects and Store interfaces (no JPA imports).
 
-### plat-data Entity Structure (`com.plat.platdata.entity`)
+### plat-data Hexagonal Structure (`com.plat.platdata`)
 
-All entities extend `BaseEntity` (`@MappedSuperclass` with `createdAt`/`updatedAt` audit fields). Standard patterns: `@Getter`, `@NoArgsConstructor(access = PROTECTED)`, `@Builder`, `GenerationType.IDENTITY`.
+**Domain Layer** (`domain/`): Pure POJOs with `@Getter @Builder @AllArgsConstructor(PRIVATE)`. No JPA dependencies.
+- `domain/user/` — User, Authentication (domain objects)
+- `domain/user/enums/` — Gender, Role, AuthType, Provider
 
-Domain groups under `entity/`:
+**Port Layer** (`repository/`): Interfaces defining storage contracts.
+- `UserStore`, `AuthenticationStore`
+
+**Entity Layer** (`entity/`): JPA entities extending `BaseEntity` (`@MappedSuperclass` with `createdAt`/`updatedAt`). Standard patterns: `@Getter`, `@NoArgsConstructor(access = PROTECTED)`, `@Builder`, `GenerationType.IDENTITY`.
 - **user/** — User, Creator, Authentication, Verification, Token
 - **character/** — CharacterEntity, CharacterLanguagePack, CharacterTranslation, Hashtag, Lorebook, LorebookTranslation, Scenario, ScenarioTranslation
 - **chat/** — Persona, ChatRoom, Message, Memory
 - **credit/** — Credit, CreditBalance, CreditTransaction, Payment, Subscription
 
-Repositories follow `{Entity}Repository extends JpaRepository<Entity, Long>` in `com.plat.platdata.repository`.
+**JPA Repositories** (`jparepository/`): `{Entity}Repository extends JpaRepository<Entity, Long>`. Internal to plat-data.
+
+**Adapters** (`adapter/`): `@Repository` implementations that convert between domain ↔ entity and delegate to JPA repositories.
+- `UserStoreAdapter`, `AuthenticationStoreAdapter`
 
 ### plat-ai AI Client Pattern (`com.plat.platai.ai`)
 

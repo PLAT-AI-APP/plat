@@ -2,7 +2,7 @@ package com.plat.platdata.entity.chat;
 
 import com.plat.platdata.entity.BaseEntity;
 import com.plat.platdata.entity.user.User;
-import com.plat.platdata.entity.user.enums.Gender;
+import com.plat.platdata.domain.user.enums.Gender;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
 import lombok.Builder;

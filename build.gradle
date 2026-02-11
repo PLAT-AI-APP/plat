@@ -3,7 +3,8 @@ plugins {
     id 'io.spring.dependency-management' version '1.1.7' apply false
 }
 
-allprojects {
+subprojects {
+
     group = projectGroup
     version = applicationVersion
 
@@ -11,9 +12,7 @@ allprojects {
         mavenCentral()
         maven { url 'https://repo.spring.io/milestone' }
     }
-}
 
-subprojects {
     apply plugin: 'java'
     apply plugin: 'io.spring.dependency-management'
     apply plugin: 'org.springframework.boot'
@@ -34,11 +33,17 @@ subprojects {
         compileOnly 'org.projectlombok:lombok'
         annotationProcessor 'org.projectlombok:lombok'
 
+        implementation 'org.springframework.boot:spring-boot-starter'
+        testImplementation 'org.springframework.boot:spring-boot-starter-test'
+        testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+
     }
 
     tasks.named('test') {
         useJUnitPlatform()
     }
+
+    tasks.register("prepareKotlinBuildScriptModel"){}
 }
 
 project(":plat-ai") {
@@ -52,9 +57,7 @@ project(":plat-ai") {
     }
 
     dependencies {
-        implementation 'org.springframework.boot:spring-boot-starter'
-        testImplementation 'org.springframework.boot:spring-boot-starter-test'
-        testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+        implementation 'org.springframework.boot:spring-boot-starter-web'
 
         implementation 'org.springframework.ai:spring-ai-starter-model-openai'
         implementation 'org.springframework.ai:spring-ai-starter-model-anthropic'
@@ -67,24 +70,49 @@ project(":plat-ai") {
 
 project(":plat-data") {
 
+    apply plugin: 'java-library'
+
     processResources.dependsOn("copySecret")
 
     tasks.register("copySecret", Copy) {
-        from "${project.rootDir}/plat-config/data"
-        include "data*.yaml"
+        from("${project.rootDir}/plat-config/data") {
+            include "data*.yaml"
+        }
+        from("${project.rootDir}/plat-config/common") {
+            include "*.yaml"
+        }
         into "${project.rootDir}/plat-data/src/main/resources"
     }
 
     dependencies {
-        implementation 'org.springframework.boot:spring-boot-starter'
-        testImplementation 'org.springframework.boot:spring-boot-starter-test'
-
         implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
+        api 'org.springframework:spring-tx'
         testImplementation 'org.springframework.boot:spring-boot-starter-data-jpa-test'
 
-        testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
         implementation 'com.h2database:h2'
+        runtimeOnly 'com.mysql:mysql-connector-j'
         testImplementation 'com.h2database:h2'
+
+        implementation 'org.springframework.boot:spring-boot-starter-security'
+        implementation 'org.springframework.boot:spring-boot-starter-oauth2-resource-server'
+        testImplementation 'org.springframework.security:spring-security-test'
+
+        // JWT
+        implementation 'io.jsonwebtoken:jjwt-api:0.13.0'
+        runtimeOnly 'io.jsonwebtoken:jjwt-impl:0.13.0'
+        runtimeOnly 'io.jsonwebtoken:jjwt-jackson:0.13.0'
+    }
+}
+
+project(":plat-redis") {
+
+    apply plugin: 'java-library'
+
+    bootJar { enabled = false }
+    jar { enabled = true }
+
+    dependencies {
+        api 'org.springframework.boot:spring-boot-starter-data-redis'
     }
 }
 
@@ -99,10 +127,11 @@ project(":plat-boot") {
     }
 
     dependencies {
-        implementation 'org.springframework.boot:spring-boot-starter-web'
-        testImplementation 'org.springframework.boot:spring-boot-starter-test'
-        testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
-
         implementation project(':plat-data')
+        implementation project(':plat-redis')
+        implementation 'org.springframework.boot:spring-boot-starter-web'
+        implementation 'org.springframework.boot:spring-boot-starter-oauth2-client'
+        implementation 'org.springframework.boot:spring-boot-starter-validation'
+        implementation 'org.springframework.boot:spring-boot-starter-mail'
     }
 }

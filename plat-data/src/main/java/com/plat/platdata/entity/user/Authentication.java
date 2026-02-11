@@ -1,7 +1,7 @@
 package com.plat.platdata.entity.user;
 
-import com.plat.platdata.entity.user.enums.AuthType;
-import com.plat.platdata.entity.user.enums.Provider;
+import com.plat.platdata.domain.user.enums.AuthType;
+import com.plat.platdata.domain.user.enums.Provider;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
 import lombok.Builder;

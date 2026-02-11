@@ -2,8 +2,8 @@ package com.plat.platdata.entity.character;
 
 import com.plat.platdata.entity.character.lorebook.Lorebook;
 import com.plat.platdata.entity.character.lorebook.LorebookTranslation;
-import com.plat.platdata.repository.LorebookRepository;
-import com.plat.platdata.repository.LorebookTranslationRepository;
+import com.plat.platdata.jparepository.LorebookRepository;
+import com.plat.platdata.jparepository.LorebookTranslationRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;

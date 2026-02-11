@@ -4,6 +4,8 @@ import com.plat.platdata.entity.BaseEntity;
 import com.plat.platdata.entity.character.enums.Language;
 import com.plat.platdata.entity.character.Creator;
 import com.plat.platdata.entity.chat.Persona;
+import com.plat.platdata.domain.user.enums.Gender;
+import com.plat.platdata.domain.user.enums.Role;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
 import lombok.Builder;
@@ -28,14 +30,18 @@ public class User extends BaseEntity {
     @Column(name = "nickname", nullable = false)
     private String nickname;
 
-    @Column(name = "profile_image", nullable = false)
+    @Column(name = "profile_image")
     private String profileImage;
 
     @Column(name = "birth", nullable = false)
     private LocalDateTime birth;
 
+    @Enumerated(EnumType.STRING)
+    private Role role;
+
+    @Enumerated(EnumType.STRING)
     @Column(name = "gender")
-    private String gender;
+    private Gender gender;
 
     @Column(name = "phone", unique = true)
     private String phone;
@@ -46,7 +52,6 @@ public class User extends BaseEntity {
     @Enumerated(EnumType.STRING)
     @Column(name = "preferred_language", nullable = false)
     private Language preferredLanguage = Language.KO;
-
 
     // TODO OneToOne EAGER 되는건 실제 로직을 작성해보고 단방향 매핑으로도 충분하면 이후 단방향으로 변경예정, 양방향 필요하면 List로 속여서 가져오게 하자
     @OneToOne(mappedBy = "user", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
@@ -69,11 +74,12 @@ public class User extends BaseEntity {
     private List<Token> tokens = new ArrayList<>();
 
     @Builder
-    public User(String nickname, String profileImage, LocalDateTime birth, String gender,
+    public User(String nickname, String profileImage, LocalDateTime birth, Gender gender, Role role,
                 String phone, Boolean adultVerified, Language preferredLanguage) {
         this.nickname = nickname;
         this.profileImage = profileImage;
         this.birth = birth;
+        this.role = role;
         this.gender = gender;
         this.phone = phone;
         this.adultVerified = adultVerified != null ? adultVerified : false;

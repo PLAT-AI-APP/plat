@@ -29,7 +29,7 @@
 
 ## 4. 하단 연관관계 표기 규칙
 1. 0,1 : 0개, 1개만 가능
-2. 0,N : 0개, N개만 가능
+2. 0,N : 0개, 1개, N개 가능
 3. 1,N : 반드시 1개 이상
 4. 1 : 반드시 1개
 5. N : 반드시 N개
@@ -43,11 +43,11 @@
 ## User
 
 ### User cascade 관계
-1. User 삭제
-2. Authentication, Token, Verification 삭제
-3. Credit, CreditTransaction, CreditBalance, Payment, Subscription 삭제
-4. Creator, Persona 삭제
-5. ChatRoom 삭제
+1. User 삭제 - 트리거
+2. Authentication, Token, Verification 삭제 - 인증 관계 삭제
+3. Credit, CreditTransaction, CreditBalance, Payment, Subscription 삭제 - 크레딧 관계 삭제
+4. Creator, Persona 삭제 - User 부가정보 삭제
+5. ChatRoom 삭제 - 채팅 데이터 삭제
 6. Character SoftDelete 요청
 
 ### Authentication
@@ -259,7 +259,6 @@ Character - Character Language Pack - Scenario_Translation 데이터만 단순 �
 - TODO : 사용자에 의해 중간 채팅데이터를 수정할수있게 했을때 이 장기기억 데이터를 어떻게 관리해야할지 논의해야함
   - 중간 995번째 메시지를 수정했다면? -> 장기기억 메모리를 어떻게 수정해야됨?
 - ChatRoom(1) : Memory(0,N)
-
 
 </연관관계_설계>
 
